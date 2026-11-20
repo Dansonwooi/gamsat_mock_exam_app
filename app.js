@@ -6,10 +6,11 @@
   const freshState = () => ({ questions: [], results: [] });
   let state = loadState();
   let activeTest = null;
+  let activeAnswerSheet = null;
   let noticeTimer = null;
 
   const $ = (selector) => document.querySelector(selector);
-  const views = ["test", "bank", "results"];
+  const views = ["test", "answers", "bank", "results"];
 
   function loadState() {
     try {
@@ -71,6 +72,7 @@
       else tab.removeAttribute("aria-current");
     });
     if (name === "test") renderTestSetup();
+    if (name === "answers") renderAnswerSheet();
     if (name === "bank") renderBank();
     if (name === "results") renderResults();
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -164,6 +166,47 @@
     `;
   }
 
+  function renderAnswerSheet() {
+    const setup = $("#answer-sheet-setup");
+    const panel = $("#answer-sheet-panel");
+    setup.hidden = activeAnswerSheet !== null;
+    panel.hidden = activeAnswerSheet === null;
+    if (!activeAnswerSheet) return;
+
+    const recordedCount = activeAnswerSheet.answers.filter((answer) => answer !== null).length;
+    panel.innerHTML = `
+      <div class="answer-sheet-card panel">
+        <div class="answer-sheet-heading">
+          <div>
+            <span class="section-tag">${sectionName(escapeHtml(activeAnswerSheet.section))}</span>
+            <h3>Your answers</h3>
+            <p>Select an option for each question. You can leave questions blank and come back to them.</p>
+          </div>
+          <span class="answer-count">${recordedCount} of ${activeAnswerSheet.answers.length} answered</span>
+        </div>
+        <div class="answer-grid">
+          ${activeAnswerSheet.answers.map((selectedIndex, questionIndex) => `
+            <div class="answer-row">
+              <span class="answer-question-number">Q${questionIndex + 1}</span>
+              <div class="answer-choice-group" role="group" aria-label="Answer for question ${questionIndex + 1}">
+                ${letters.map((letter, optionIndex) => `
+                  <button class="answer-choice ${selectedIndex === optionIndex ? "is-selected" : ""}" type="button" data-sheet-answer="${optionIndex}" data-question-index="${questionIndex}" aria-pressed="${selectedIndex === optionIndex}" aria-label="Question ${questionIndex + 1}, ${letter}">${letter}</button>
+                `).join("")}
+              </div>
+            </div>
+          `).join("")}
+        </div>
+        <div class="answer-sheet-actions">
+          <button class="button button-secondary" type="button" data-sheet-action="add">＋ Add question</button>
+          <div class="answer-sheet-actions-right">
+            <button class="button button-quiet" type="button" data-sheet-action="cancel">Cancel</button>
+            <button class="button button-primary" type="button" data-sheet-action="save" ${recordedCount === 0 ? "disabled" : ""}>Save answers <span aria-hidden="true">→</span></button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   function renderResults() {
     const container = $("#results-list");
     if (!state.results.length) {
@@ -171,16 +214,42 @@
         <div class="empty-state panel">
           <div class="empty-icon" aria-hidden="true">↗</div>
           <h3>No results just yet.</h3>
-          <p>Finish a practice test and your score and answers will appear here.</p>
-          <button class="button button-secondary" type="button" data-go="test">Take your first test <span aria-hidden="true">→</span></button>
+          <p>Finish a practice test or save an answer sheet to see it here.</p>
+          <button class="button button-secondary" type="button" data-go="answers">Record answers <span aria-hidden="true">→</span></button>
         </div>`;
       return;
     }
     container.innerHTML = [...state.results].reverse().map((result) => {
-      const percent = result.questionCount ? Math.round((result.correctCount / result.questionCount) * 100) : 0;
       const date = new Date(result.finishedAt).toLocaleString(undefined, {
         dateStyle: "medium", timeStyle: "short"
       });
+      if (result.recordType === "answer-sheet") {
+        const recordedCount = result.answers.filter((answer) => answer.selectedIndex !== null).length;
+        const unansweredCount = result.answers.length - recordedCount;
+        return `
+          <article class="result-card">
+            <div class="result-summary">
+              <div class="result-meta">
+                <span class="section-tag">${sectionName(escapeHtml(result.section))}</span>
+                <span class="result-date">${escapeHtml(date)}</span>
+              </div>
+              <div class="result-score">${recordedCount} <small>answers recorded</small></div>
+            </div>
+            <p class="result-breakdown">${unansweredCount} unanswered · ${result.answers.length} questions</p>
+            <details>
+              <summary>View recorded answers</summary>
+              <div class="answer-history-grid">
+                ${result.answers.map((answer) => `
+                  <div class="answer-history-item">
+                    <span>Q${answer.questionNumber}</span>
+                    <strong>${answer.selectedIndex === null ? "—" : letters[answer.selectedIndex]}</strong>
+                  </div>
+                `).join("")}
+              </div>
+            </details>
+          </article>`;
+      }
+      const percent = result.questionCount ? Math.round((result.correctCount / result.questionCount) * 100) : 0;
       return `
         <article class="result-card">
           <div class="result-summary">
@@ -241,6 +310,29 @@
     switchView("results");
   }
 
+  function saveAnswerSheet() {
+    const result = {
+      id: createId(),
+      recordType: "answer-sheet",
+      section: activeAnswerSheet.section,
+      startedAt: activeAnswerSheet.startedAt,
+      finishedAt: new Date().toISOString(),
+      answers: activeAnswerSheet.answers.map((selectedIndex, index) => ({
+        questionNumber: index + 1,
+        selectedIndex
+      }))
+    };
+    state.results.push(result);
+    if (!saveState()) {
+      state.results.pop();
+      return;
+    }
+    activeAnswerSheet = null;
+    renderCounts();
+    showNotice("Your answer sheet has been saved.", true);
+    switchView("results");
+  }
+
   function createId() {
     if (window.crypto && typeof window.crypto.randomUUID === "function") return window.crypto.randomUUID();
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -271,6 +363,32 @@
       renderBank();
       renderTestSetup();
       showNotice("Question removed from your bank. Completed results are unchanged.", true);
+      return;
+    }
+
+    const sheetAnswerButton = event.target.closest("[data-sheet-answer]");
+    if (sheetAnswerButton && activeAnswerSheet) {
+      const questionIndex = Number(sheetAnswerButton.dataset.questionIndex);
+      activeAnswerSheet.answers[questionIndex] = Number(sheetAnswerButton.dataset.sheetAnswer);
+      renderAnswerSheet();
+      return;
+    }
+
+    const sheetAction = event.target.closest("[data-sheet-action]")?.dataset.sheetAction;
+    if (sheetAction === "add" && activeAnswerSheet) {
+      activeAnswerSheet.answers.push(null);
+      const questionIndex = activeAnswerSheet.answers.length - 1;
+      renderAnswerSheet();
+      $(`#answer-sheet-panel [data-sheet-answer="0"][data-question-index="${questionIndex}"]`)?.focus();
+      return;
+    }
+    if (sheetAction === "save" && activeAnswerSheet) {
+      saveAnswerSheet();
+      return;
+    }
+    if (sheetAction === "cancel" && activeAnswerSheet) {
+      activeAnswerSheet = null;
+      renderAnswerSheet();
       return;
     }
 
@@ -318,6 +436,16 @@
   $("#test-section").addEventListener("change", renderTestSetup);
   $("#bank-filter").addEventListener("change", renderBank);
 
+  $("#start-answer-sheet-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    activeAnswerSheet = {
+      section: $("#answer-sheet-section").value,
+      startedAt: new Date().toISOString(),
+      answers: [null]
+    };
+    renderAnswerSheet();
+  });
+
   $("#question-form").addEventListener("submit", (event) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -345,6 +473,7 @@
 
   renderCounts();
   renderTestSetup();
+  renderAnswerSheet();
   renderBank();
   renderResults();
 })();

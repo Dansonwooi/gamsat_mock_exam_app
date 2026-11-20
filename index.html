@@ -22,11 +22,12 @@
         <section class="intro">
           <p class="eyebrow">YOUR STUDY SPACE</p>
           <h1>Practice with purpose.</h1>
-          <p class="intro-copy">Build your own question bank, take a practice test, and keep track of every attempt.</p>
+          <p class="intro-copy">Record answers to your own practice questions, or build a question bank and take a practice test.</p>
         </section>
 
         <nav class="tabs" aria-label="Main navigation">
           <button class="tab is-active" type="button" data-view="test" aria-current="page">Take a test</button>
+          <button class="tab" type="button" data-view="answers">Record answers</button>
           <button class="tab" type="button" data-view="bank">Question bank <span class="tab-count" id="bank-tab-count">0</span></button>
           <button class="tab" type="button" data-view="results">Past results <span class="tab-count" id="results-tab-count">0</span></button>
         </nav>
@@ -68,6 +69,35 @@
             <p>Add questions to your bank, then come back here to practise them.</p>
             <button class="button button-secondary" type="button" data-go="bank">Build your question bank <span aria-hidden="true">→</span></button>
           </div>
+        </section>
+
+        <section class="view" id="view-answers" aria-labelledby="answers-heading" hidden>
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">YOUR QUESTIONS, YOUR ANSWER SHEET</p>
+              <h2 id="answers-heading">Record answers</h2>
+              <p class="section-subtitle">Choose A, B, C, or D for each question. No question text needed.</p>
+            </div>
+          </div>
+
+          <div class="answer-sheet-setup panel" id="answer-sheet-setup">
+            <div class="setup-copy">
+              <span class="step-number">01</span>
+              <div>
+                <h3>Start an answer sheet</h3>
+                <p>Pick a section, then record as many numbered answers as you need.</p>
+              </div>
+            </div>
+            <form id="start-answer-sheet-form" class="setup-form">
+              <label class="sr-only" for="answer-sheet-section">Choose a section</label>
+              <select id="answer-sheet-section" name="section">
+                <option value="1">Section 1</option>
+                <option value="2">Section 2</option>
+              </select>
+              <button class="button button-primary" type="submit">Start answer sheet <span aria-hidden="true">→</span></button>
+            </form>
+          </div>
+          <div class="answer-sheet-panel" id="answer-sheet-panel" hidden></div>
         </section>
 
         <section class="view" id="view-bank" aria-labelledby="bank-heading" hidden>
@@ -133,7 +163,7 @@
             <div>
               <p class="eyebrow">YOUR PROGRESS, OVER TIME</p>
               <h2 id="results-heading">Past results</h2>
-              <p class="section-subtitle">Every completed test is saved here with your answers and score.</p>
+              <p class="section-subtitle">Completed tests and answer sheets are saved here.</p>
             </div>
             <div class="stat-chip"><span id="results-total">0</span> attempts</div>
           </div>
